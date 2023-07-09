@@ -107,31 +107,44 @@ func NewHTTPServer(lc fx.Lifecycle, mux *http.ServeMux, log *zap.Logger) *http.S
 
 // NewServeMux builds a ServeMux that will route requests
 // to the given EchoHandler.
-func NewServeMux(route1, route2 Route) *http.ServeMux {
+func NewServeMux(routes []Route) *http.ServeMux {
 	fmt.Println("--- NewServeMux called ---")
 	mux := http.NewServeMux()
-	mux.Handle(route1.Pattern(), route1)
-	mux.Handle(route2.Pattern(), route2)
+	for _, route := range routes {
+		mux.Handle(route.Pattern(), route)
+	}
 	return mux
+}
+
+// AsRoute annotates the given constructor to state that
+// it provides a route to the "routes" group.
+func AsRoute(f any) any {
+	return fx.Annotate(
+		f,
+		fx.As(new(Route)),
+		fx.ResultTags(`group:"routes"`),
+	)
 }
 
 func main() {
 	fx.New(
 		fx.Provide(
 			NewHTTPServer,
-			fx.Annotate(
-				NewEchoHandler,
-				fx.As(new(Route)),
-				fx.ResultTags(`name:"echo"`),
-			),
-			fx.Annotate(
-				NewHelloHandler,
-				fx.As(new(Route)),
-				fx.ResultTags(`name:"hello"`),
-			),
+			// fx.Annotate(
+			// 	NewEchoHandler,
+			// 	fx.As(new(Route)),
+			// 	fx.ResultTags(`name:"echo"`),
+			// ),
+			// fx.Annotate(
+			// 	NewHelloHandler,
+			// 	fx.As(new(Route)),
+			// 	fx.ResultTags(`name:"hello"`),
+			// ),
+			AsRoute(NewEchoHandler),
+			AsRoute(NewHelloHandler),
 			fx.Annotate(
 				NewServeMux,
-				fx.ParamTags(`name:"echo"`, `name:"hello"`),
+				fx.ParamTags(`group:"routes"`),
 			),
 			NewDummyStruct, // just for experimenting
 			zap.NewExample,
