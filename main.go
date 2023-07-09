@@ -31,6 +31,11 @@ func NewDummyStruct() *DummyStruct {
 	return &DummyStruct{}
 }
 
+func AnotherNewDummyStruct() *DummyStruct {
+	fmt.Println("--- AnotherNewDummyStruct called ---")
+	return &DummyStruct{}
+}
+
 // EchoHandler is an http.Handler that copies its request body
 // back to the response.
 type EchoHandler struct {
@@ -132,8 +137,8 @@ func main() {
 			NewHTTPServer,
 			// fx.Annotate(
 			// 	NewEchoHandler,
-			// 	fx.As(new(Route)),
-			// 	fx.ResultTags(`name:"echo"`),
+			// 	fx.As(new(Route)), // casts struct to interface of Route
+			// 	fx.ResultTags(`name:"echo"`), // annotate to add tags name to distinguish between NewEchoHandler and NewHelloHandler
 			// ),
 			// fx.Annotate(
 			// 	NewHelloHandler,
@@ -144,9 +149,10 @@ func main() {
 			AsRoute(NewHelloHandler),
 			fx.Annotate(
 				NewServeMux,
-				fx.ParamTags(`group:"routes"`),
+				fx.ParamTags(`group:"routes"`), // ResultTags with `group:"routes"` will be passed to this ParamTags
 			),
 			NewDummyStruct, // just for experimenting
+			// AnotherNewDummyStruct, // since *DummyStruct is already provided by NewDummyStruct so it will cause error
 			zap.NewExample,
 		),
 		// *DummyStruct added to the args so NewDummyStruct will be called inorder to get the dependency of *DummyStruct
