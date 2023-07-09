@@ -11,6 +11,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// Route is an http.Handler that knows the mux pattern
+// under which it will be registered.
+type Route interface {
+	http.Handler
+
+	// Pattern reports the path at which this is registered.
+	Pattern() string
+}
+
 type DummyStruct struct{}
 
 func (*DummyStruct) DoNothing() {
@@ -34,6 +43,10 @@ func (h *EchoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if _, err := io.Copy(w, r.Body); err != nil {
 		h.log.Warn("Failed to handle request:", zap.Error(err))
 	}
+}
+
+func (*EchoHandler) Pattern() string {
+	return "/echo"
 }
 
 // NewEchoHandler builds a new EchoHandler.
@@ -64,10 +77,10 @@ func NewHTTPServer(lc fx.Lifecycle, mux *http.ServeMux, log *zap.Logger) *http.S
 
 // NewServeMux builds a ServeMux that will route requests
 // to the given EchoHandler.
-func NewServeMux(echo *EchoHandler) *http.ServeMux {
+func NewServeMux(route Route) *http.ServeMux {
 	fmt.Println("--- NewServeMux called ---")
 	mux := http.NewServeMux()
-	mux.Handle("/echo", echo)
+	mux.Handle(route.Pattern(), route)
 	return mux
 }
 
@@ -75,7 +88,10 @@ func main() {
 	fx.New(
 		fx.Provide(
 			NewHTTPServer,
-			NewEchoHandler,
+			fx.Annotate(
+				NewEchoHandler,
+				fx.As(new(Route)),
+			),
 			NewServeMux,
 			NewDummyStruct, // just for experimenting
 			zap.NewExample,
