@@ -6,9 +6,9 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 )
 
 type DummyStruct struct{}
@@ -24,23 +24,25 @@ func NewDummyStruct() *DummyStruct {
 
 // EchoHandler is an http.Handler that copies its request body
 // back to the response.
-type EchoHandler struct{}
+type EchoHandler struct {
+	log *zap.Logger
+}
 
 // ServeHTTP handles an HTTP request to the /echo endpoint.
-func (*EchoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *EchoHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("--- ServeHTTP of EchoHandler called ---")
 	if _, err := io.Copy(w, r.Body); err != nil {
-		fmt.Fprintln(os.Stderr, "Failed to handle request:", err)
+		h.log.Warn("Failed to handle request:", zap.Error(err))
 	}
 }
 
 // NewEchoHandler builds a new EchoHandler.
-func NewEchoHandler() *EchoHandler {
+func NewEchoHandler(log *zap.Logger) *EchoHandler {
 	fmt.Println("--- NewEchoHandler called ---")
-	return &EchoHandler{}
+	return &EchoHandler{log: log}
 }
 
-func NewHTTPServer(lc fx.Lifecycle, mux *http.ServeMux) *http.Server {
+func NewHTTPServer(lc fx.Lifecycle, mux *http.ServeMux, log *zap.Logger) *http.Server {
 	fmt.Println("--- NewHTTPServer called ---")
 	srv := &http.Server{Addr: ":8080", Handler: mux}
 	lc.Append(fx.Hook{
@@ -49,7 +51,7 @@ func NewHTTPServer(lc fx.Lifecycle, mux *http.ServeMux) *http.Server {
 			if err != nil {
 				return err
 			}
-			fmt.Println("Starting HTTP server at", srv.Addr)
+			log.Info("Starting HTTP server", zap.String("addr", srv.Addr))
 			go srv.Serve(ln)
 			return nil
 		},
@@ -76,6 +78,7 @@ func main() {
 			NewEchoHandler,
 			NewServeMux,
 			NewDummyStruct, // just for experimenting
+			zap.NewExample,
 		),
 		// *DummyStruct added to the args so NewDummyStruct will be called inorder to get the dependency of *DummyStruct
 		fx.Invoke(func(*DummyStruct, *http.Server) {
