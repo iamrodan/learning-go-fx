@@ -55,6 +55,36 @@ func NewEchoHandler(log *zap.Logger) *EchoHandler {
 	return &EchoHandler{log: log}
 }
 
+// HelloHandler is an HTTP handler that
+// prints a greeting to the user.
+type HelloHandler struct {
+	log *zap.Logger
+}
+
+func (*HelloHandler) Pattern() string {
+	return "/hello"
+}
+
+func (h *HelloHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		h.log.Error("Failed to read request", zap.Error(err))
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := fmt.Fprintf(w, "Hello, %s\n", body); err != nil {
+		h.log.Error("Failed to write response", zap.Error(err))
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+}
+
+// NewHelloHandler builds a new HelloHandler.
+func NewHelloHandler(log *zap.Logger) *HelloHandler {
+	return &HelloHandler{log: log}
+}
+
 func NewHTTPServer(lc fx.Lifecycle, mux *http.ServeMux, log *zap.Logger) *http.Server {
 	fmt.Println("--- NewHTTPServer called ---")
 	srv := &http.Server{Addr: ":8080", Handler: mux}
@@ -77,10 +107,11 @@ func NewHTTPServer(lc fx.Lifecycle, mux *http.ServeMux, log *zap.Logger) *http.S
 
 // NewServeMux builds a ServeMux that will route requests
 // to the given EchoHandler.
-func NewServeMux(route Route) *http.ServeMux {
+func NewServeMux(route1, route2 Route) *http.ServeMux {
 	fmt.Println("--- NewServeMux called ---")
 	mux := http.NewServeMux()
-	mux.Handle(route.Pattern(), route)
+	mux.Handle(route1.Pattern(), route1)
+	mux.Handle(route2.Pattern(), route2)
 	return mux
 }
 
@@ -91,8 +122,17 @@ func main() {
 			fx.Annotate(
 				NewEchoHandler,
 				fx.As(new(Route)),
+				fx.ResultTags(`name:"echo"`),
 			),
-			NewServeMux,
+			fx.Annotate(
+				NewHelloHandler,
+				fx.As(new(Route)),
+				fx.ResultTags(`name:"hello"`),
+			),
+			fx.Annotate(
+				NewServeMux,
+				fx.ParamTags(`name:"echo"`, `name:"hello"`),
+			),
 			NewDummyStruct, // just for experimenting
 			zap.NewExample,
 		),
